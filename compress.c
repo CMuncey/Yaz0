@@ -62,7 +62,7 @@ int main(int argc, char** argv)
 	fclose(f);
 
 	/* Compress the source file */
-	yaz0_compress(src, srcSize, dst, &dstSize);
+	dstSize = yaz0_compress(src, srcSize, dst);
 	free(src);
 
 	/* Write the compressed file */

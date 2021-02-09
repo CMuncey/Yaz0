@@ -26,13 +26,15 @@ uint32_t yaz0_rabin_karp(uint8_t* src, int srcSize, int srcPos, uint32_t* matchP
 
 	/* Generate simple "hashes" by converting to a 3 byte int */
 	/* Make a hash for where we're looking, and what we're matching */
-	hash = *(int*)(src + srcPos);
+	/* We need big endian because we're going to move through the bytes */
+	/* And little endian is trash anyway */
+	hash = htobe32(*(int*)(src + srcPos));
 	hash = hash >> 8;
-	curHash = *(int*)(src + startPos);
+	curHash = htobe32(*(int*)(src + startPos));
 	curHash = curHash >> 8;
 
 	/* Search through data */
-	/* This can probably benefit from SIMD */
+	/* This can probably benefit from threads */
 	for(i = startPos; i < srcPos; i++)
 	{
 		/* If 3 bytes match, check for more */
@@ -167,31 +169,30 @@ int yaz0_internal(uint8_t* src, int srcSize, uint8_t* dst)
 	return(dstPos);
 }
 
-void yaz0_compress(uint8_t* src, int srcSize, uint8_t* dst, int* dstSize)
+int yaz0_compress(uint8_t* src, int srcSize, uint8_t* dst)
 {
 	int temp;
 
 	/* Write the Yaz0 header */
 	memcpy(dst, "Yaz0", 4);
-	memcpy(dst + 4, &srcSize, 4);
+	temp = htobe32(srcSize);
+	memcpy(dst + 4, &temp, 4);
 
 	/* Encode, align dstSize to nearest multiple of 32 */
 	temp = yaz0_internal(src, srcSize, dst + 16);
-	*dstSize = (temp + 31) & -16;
-
-	return;
+	return((temp + 31) & -16);
 }
 
 /* This one might need a little work, it was written years ago */
 /* It doesn't check bounds of source, and assumes dstSize is good */
-/* Plus it's ugly and it currently doesn't work properly */
 int yaz0_decompress(uint8_t* src, uint8_t** dst)
 {
 	uint32_t srcPlace, dstPlace, dstSize;
 	uint32_t i, dist, copyPlace, numBytes;
 	uint8_t codeByte, byte1, byte2, bitCount;
 
-	dstSize = *(int*)(src + 4);
+	/* Extract the dstSize, set to host endianness, allocate memory */
+	dstSize = be32toh(*(int*)(src + 4));
 	*dst = malloc(dstSize);
 
 	srcPlace = 0x10;
